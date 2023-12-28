@@ -1,0 +1,77 @@
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(8,9,4,5,6,7); // Define the LCD connections 
+
+// Motor A connections
+int in1 = A1;
+int in2 = A2;
+// Motor B connections
+int in3 = A3;
+int in4 = A4;
+
+void setup() {
+	// Set all the motor control pins to outputs
+	pinMode(in1, OUTPUT);
+	pinMode(in2, OUTPUT);
+	pinMode(in3, OUTPUT);
+	pinMode(in4, OUTPUT);
+	
+	// Turn off motors - Initial state
+	digitalWrite(in1, LOW);
+	digitalWrite(in2, LOW);
+	digitalWrite(in3, LOW);
+	digitalWrite(in4, LOW);
+
+  //Set up for lcd
+  lcd.begin(16, 2); // Initialize the LCD 
+  lcd.print("10 Second Timer");// Display a title 
+  delay(2000); // Pause for 2 seconds 
+  lcd.clear(); // Clear the screen 
+   // Set the cursor to the second line (line 1, character 0)
+  lcd.setCursor(0, 1);
+  // Print on the second line
+  lcd.print("TIME:"); 
+}
+
+void loop() {
+  delay(2000);
+  long startTime = 0; // record the start time
+  if (millis() - startTime <= 10000){ // check if 10 seconds have passed
+	  startMoving();//Start moving
+    timer();//Count the time
+    stopMoving();
+  }
+	else {
+    stopMoving();
+  }
+}
+
+void timer() { 
+  for (int i = 1; i < 11; i++) { //
+    lcd.setCursor(0, 1); // Set the cursor to the second row 
+    lcd.print("  ");//Clear the screen
+    lcd.print(i); // Display the remaining seconds 
+    delay(1000); // Wait for 1 second 
+    lcd.print(" ");//Clear the screen again therefore no remaining 0 i displayed
+    } 
+    lcd.clear(); // Clear the seconds display 
+    lcd.print("Time's DOWN!!!"); // Display "Time's DOWN!" when the timer is done 
+    //while (true); // Loop indefinitely when the timer is done 
+    }
+
+
+// This function lets you control spinning direction of motors
+void startMoving() {
+	// Turn on motor A & B
+	digitalWrite(in1, HIGH);
+	digitalWrite(in2, LOW);
+	digitalWrite(in3, HIGH);
+	digitalWrite(in4, LOW);
+}
+void stopMoving(){
+	// Turn off motors
+	digitalWrite(in1, LOW);
+	digitalWrite(in2, LOW);
+	digitalWrite(in3, LOW);
+	digitalWrite(in4, LOW);
+
+}
