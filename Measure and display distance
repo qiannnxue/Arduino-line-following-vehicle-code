@@ -1,0 +1,110 @@
+// Define sensor pins
+int R_S = 1;
+int L_S = 2;
+
+// Define motor connections
+int enA = 11;
+int in1 = A0;
+int in2 = A1;
+int enB = 3;
+int in3 = A2;
+int in4 = A3;
+
+//Initial for start time
+long startTime = 0;  // record the start time
+
+void setup() {
+  //Set Sensor to input
+  pinMode(R_S, INPUT);
+  pinMode(L_S, INPUT);
+  // Set all the motor control pins to outputs
+  pinMode(enA, OUTPUT);
+  pinMode(enB, OUTPUT);
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
+
+  // Turn off motors - Initial state
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+  digitalWrite(enA, HIGH);
+  digitalWrite(enB, HIGH);
+
+}
+
+void loop() {
+
+  if (millis() - startTime <= 1200) {
+    startEngine();
+  } else {
+    if ((digitalRead(R_S) == 0) && (digitalRead(L_S) == 1)) {
+      moveForward();
+    } else if ((digitalRead(R_S) == 1) && (digitalRead(L_S) == 1)) {
+      turnRight();
+    } else if ((digitalRead(R_S) == 0) && (digitalRead(L_S) == 0)) {
+      turnLeft();
+    } else if ((digitalRead(R_S) == 1) && (digitalRead(L_S) == 0)) {
+      stopMoving();
+    }
+  }
+}
+
+void startEngine() {
+  analogWrite(enA, 255);
+  analogWrite(enB, 255);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+//Move the vehicle foward
+void moveForward() {
+  analogWrite(enA, 80);
+  analogWrite(enB, 80);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+//Move the vehicle backward
+void moveBackward() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+//Let the vehicle turn left
+void turnLeft() {
+  analogWrite(enA, 120);
+  analogWrite(enB, 200);
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  //delay(35);
+}
+
+//Let the vehicle turn right
+void turnRight() {
+  analogWrite(enA, 200);
+  analogWrite(enB, 120);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+  //delay(35);
+}
+
+//Stop the vehicle
+void stopMoving() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+}
