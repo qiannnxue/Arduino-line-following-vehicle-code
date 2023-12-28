@@ -1,0 +1,465 @@
+// Include necessary libraries
+#include <Wire.h>
+#include <LiquidCrystal.h>
+#include <stdlib.h> 
+
+ // Define the LCD connections
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7); 
+
+//Define LCD time
+int remainingTime = 1;
+
+// Define sensor pins
+int R_S = 10;
+int L_S = 2;
+
+//Define rotary encoder connections
+int RE1 = 12;
+int RE2 = 1;
+
+// Define motor A connections
+int enA = 11;
+int in1 = A1;
+int in2 = A0;
+
+// Define motor B connections
+int enB = 3;
+int in3 = A3;
+int in4 = A2;
+
+// MPU6050 variables
+float RateRoll, RatePitch, RateYaw;
+float AccX, AccY, AccZ;
+float AngleRoll, AnglePitch;
+float LoopTimer;
+
+float initialX;
+float initialY;
+float initialZ;
+
+double angleXDiff;
+double angleYDiff;
+double angleZDiff;
+
+float lastAngle;
+
+//Initial for Rotary Encoder 1
+int click1 = 0;
+int preDistance1 = 0;
+int nowDistance1;
+float olDistance = 0;
+float realDistance1=0;
+int range = 177;
+float totalDistance = 0;
+
+//Initial for Rotary Encoder 2
+int click2 = 0;
+float preDistance2 = 0;
+float nowDistance2;
+float noClick2=0;
+float realDistance2=0;
+
+// Time variables
+long startTime = 0;
+unsigned long previousMillis = 0;
+unsigned long interval = 1000; // the number of milliseconds you want to wait between updates
+int timeGo = 0;
+unsigned long lastAngleTime = 0;
+
+// State variable for turbo mode
+bool turboActivated = false;
+bool done180 = false;
+
+void setup() {
+  // Sensor pin setup
+  pinMode(R_S, INPUT);
+  pinMode(L_S, INPUT);
+
+  // Motor pin setup
+  pinMode(enA, OUTPUT);
+  pinMode(enB, OUTPUT);
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
+  //Set Encoder pins as input
+  pinMode(RE1, INPUT);
+  pinMode(RE2, INPUT);
+  // Turn off motors
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+  digitalWrite(enA, HIGH);
+  digitalWrite(enB, HIGH);
+
+  // MPU6050 setup
+  Serial.begin(57600);
+  Wire.setClock(400000);
+  Wire.begin();
+  delay(250);
+  Wire.beginTransmission(0x68); 
+  Wire.write(0x6B);
+  Wire.write(0x00);
+  Wire.endTransmission();
+
+  //Set up for lcd
+  lcd.begin(16, 2);           // Initialize the LCD   
+  lcd.clear();                // Clear the screen
+  //lcd.print("DISTANCE:");
+
+  //Set up for rotary encoder
+  preDistance1 = digitalRead(RE1);
+  preDistance2 = digitalRead(RE2);
+}
+
+void loop(){
+  calTime();
+  measureDistance1();
+  realDistance1 = calculateDistance1();
+
+  if (millis() - startTime <= 400) {
+    startEngine();
+    measureDistance1();
+    realDistance1 = calculateDistance1();
+    displayDistance1(realDistance1);
+  } 
+  else {
+    if(millis() - startTime <= 5000){ 
+    timer2();
+    continueMoving();
+    measureDistance1();
+    realDistance1 = calculateDistance1();
+    gyro_signals();
+    gyroSerial();
+    //recordInitial();
+    //gyro_signals();
+    //gyroSerial();
+    calculateAngleDiff();
+    displayDistance1(realDistance1);
+    //Normal moving
+    if ((angleYDiff > 23) && (turboActivated == false)){
+      angleDisplay();
+      turboMode();
+      delay(1065);
+      onTheRamp();
+      stopMoving();
+      delay(1000);
+      startEngine();
+      delay(200);
+      turboActivated = true;
+      olDistance = realDistance1;
+      click1 = 0;
+      measureDistance1();
+      realDistance1 = calculateDistance1();
+      }
+    }
+    else{
+      if ((click1 < range) && (turboActivated == true ) && (done180 == false))
+      {
+        continueMoving2();
+        measureDistance1();
+        realDistance1 = calculateDistance1();
+        displayDistance1(realDistance1);
+      }
+      else if ((click1 == range) && (turboActivated == true) && (done180 == false)){
+        click1 = (range+1);
+        done180 = true;
+        stopMoving();      
+        lcd.clear();
+        lcd.print("Distance2: ");
+        lcd.setCursor(11,0);
+        lcd.print(realDistance1);
+        timer1();
+        lcd.clear();
+        startEngine();
+        delay(8);
+        continueMoving2();
+      }
+      else if ((click1 > range) && (turboActivated == true ) && (done180 == true)){
+        continueMoving2();
+        lcd.setCursor(0,0);
+        lcd.print("Distance3: ");
+        lcd.setCursor(11, 0);      // Set the cursor to the second row
+        lcd.print(realDistance1);
+        timer2();
+        continueMoving();
+      }
+    }
+  }
+  if ((digitalRead(R_S) == 1) && (digitalRead(L_S) == 1) && (turboActivated == true) && (done180 == true)){
+    const unsigned int endTime = timeGo;
+    didadidaEnd();
+    lcd.clear();
+    totalDistance =  realDistance1 + olDistance;
+    displayDistance1(totalDistance);
+    lcd.setCursor(0,1);
+    lcd.print("Total Time: ");
+    lcd.print(endTime);
+    lcd.setCursor(12,1);
+    delay(9999999999999999999999999);
+  }
+}
+  
+void startEngine() {
+  analogWrite(enA, 180);
+  analogWrite(enB, 180);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+void continueMoving(){
+  if ((digitalRead(R_S) == 0) && (digitalRead(L_S) == 0)) {
+    moveForward();
+      } 
+  else if ((digitalRead(R_S) == 1) && (digitalRead(L_S) == 0)) {
+    turnRight();
+      }  
+  else if ((digitalRead(R_S) == 0) && (digitalRead(L_S) == 1)) {
+    turnLeft();
+      } 
+  else if ((digitalRead(R_S) == 1) && (digitalRead(L_S) == 1)) {
+    didadidaEnd();
+      }
+}
+
+void continueMoving2(){
+  if ((digitalRead(R_S) == 0) && (digitalRead(L_S) == 0)) {
+    moveForward2();
+      } 
+  else if ((digitalRead(R_S) == 1) && (digitalRead(L_S) == 0)) {
+    turnRight2();
+      }  
+  else if ((digitalRead(R_S) == 0) && (digitalRead(L_S) == 1)) {
+    turnLeft2();
+      } 
+  else if ((digitalRead(R_S) == 1) && (digitalRead(L_S) == 1)) {
+    didadidaEnd();
+      }
+}
+
+void moveForward() {
+  analogWrite(enA, 100);
+  analogWrite(enB, 100);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void moveForward2() {
+  analogWrite(enA, 60);
+  analogWrite(enB, 60);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+void moveBackward() {
+  analogWrite(enA, 255);
+  analogWrite(enB, 255);
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void turnLeft() {
+  analogWrite(enA, 230);
+  analogWrite(enB, 230);
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+void turnLeft2() {
+  analogWrite(enA, 255);
+  analogWrite(enB, 255);
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void turnRight() {
+  analogWrite(enA, 230);
+  analogWrite(enB, 230);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void turnRight2() {
+  analogWrite(enA, 255);
+  analogWrite(enB, 255);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void stopMoving() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+}
+
+void didadidaEnd(){
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+}
+
+void turboMode() {
+  analogWrite(enA, 255);
+  analogWrite(enB, 255);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void gyro_signals(void) {
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1A);
+  Wire.write(0x05);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1C);
+  Wire.write(0x10);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x3B);
+  Wire.endTransmission(); 
+  Wire.requestFrom(0x68,6);
+  int16_t AccXLSB = Wire.read() << 8 | Wire.read();
+  int16_t AccYLSB = Wire.read() << 8 | Wire.read();
+  int16_t AccZLSB = Wire.read() << 8 | Wire.read();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1B); 
+  Wire.write(0x8);
+  Wire.endTransmission();                                                   
+  Wire.beginTransmission(0x68);
+  Wire.write(0x43);
+  Wire.endTransmission();
+  Wire.requestFrom(0x68,6);
+  int16_t GyroX=Wire.read()<<8 | Wire.read();
+  int16_t GyroY=Wire.read()<<8 | Wire.read();
+  int16_t GyroZ=Wire.read()<<8 | Wire.read();
+  RateRoll=(float)GyroX/65.5;
+  RatePitch=(float)GyroY/65.5;
+  RateYaw=(float)GyroZ/65.5;
+  AccX=(float)AccXLSB/4096;
+  AccY=(float)AccYLSB/4096;
+  AccZ=(float)AccZLSB/4096;
+  AngleRoll=atan(AccY/sqrt(AccX*AccX+AccZ*AccZ))*1/(3.142/180);
+  AnglePitch=-atan(AccX/sqrt(AccY*AccY+AccZ*AccZ))*1/(3.142/180);
+}
+
+void recordInitial() {
+  initialX = AccX;
+  initialY = AccY;
+  initialZ = AccZ;
+}
+
+float calculateAngleDiff(){
+  angleXDiff = abs((AccX - 0)*100);
+  angleYDiff = abs((AccY - 0)*100);
+  angleZDiff = abs((AccZ - 0)*100);
+  Serial.print("Inclination AngleX= ");
+  Serial.println(angleXDiff);
+
+  Serial.print("Inclination AngleY= ");
+  Serial.println(angleYDiff);
+
+  Serial.print("Inclination AngleZ= ");
+  Serial.println(angleZDiff);
+
+  Serial.println("-----------------------------------------");
+
+  delay(50);
+  return angleYDiff;
+}
+
+void onTheRamp(){
+  stopMoving();
+  delay(4000);
+  turnRight();
+  delay(1736);
+}
+
+void displayDistance1(float realDistance1) {
+ lcd.setCursor(0,0);
+ lcd.print("Distance1: ");
+ lcd.setCursor(11, 0);      // Set the cursor to the second row
+ lcd.print("     ");          //Clear the screen
+ lcd.setCursor(11, 0);      // Set the cursor to the second row
+ if (click1 > 0) {           // If at least one click is detected
+    realDistance1 = calculateDistance1(); // Calculate the distance based on the click count
+ }
+ lcd.print(realDistance1); // Display the distance travelled
+}
+
+//Measre the distance travelled by the vehicle
+void measureDistance1() {
+  nowDistance1 = digitalRead(RE1);
+  if (nowDistance1 != preDistance1 && nowDistance1 == 1) {
+    click1++;
+  }
+  preDistance1 = nowDistance1;  // Update the previous state
+}
+
+float calculateDistance1() {
+  float noClick1 = click1 ;
+  float realDistance1 = (1.0 / 20.0) * 20.42 * (float)noClick1;
+  return realDistance1;
+}
+
+void timer1() { 
+ for (int i = 1 ; i < 4; i++) {
+    lcd.setCursor(0,1);
+    lcd.print("time1: ");
+    lcd.setCursor(8, 1); // Set the cursor to the second row
+    lcd.print(i); // Display the remaining seconds 
+    delay(1000); // Wait for 1 second 
+ }
+}
+
+void timer2(){
+  lcd.setCursor(0,1);
+  lcd.print("time:   ");
+  lcd.setCursor(8,1);
+  lcd.print(timeGo);
+}
+
+void calTime(){
+  unsigned long currentMillis = millis();
+
+ if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    timeGo++;
+ }
+}
+
+void gyroSerial(){
+  Serial.print("Acceleration X [g]= ");
+  Serial.print(AccX);
+  Serial.print(" Acceleration Y [g]= ");
+  Serial.print(AccY);
+  Serial.print(" Acceleration Z [g]= ");
+  Serial.println(AccZ);
+  delay(50);
+}
+
+void angleDisplay(){
+ lastAngle = calculateAngleDiff();
+ lcd.clear();
+ lcd.setCursor(0,0);
+ lcd.print("Angle: ");
+ lcd.setCursor(7, 0);
+ lcd.print(lastAngle);
+}
