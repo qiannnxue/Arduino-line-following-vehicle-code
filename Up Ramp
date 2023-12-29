@@ -138,7 +138,7 @@ void loop(){
     calculateAngleDiff();
     displayDistance1(realDistance1);
     //Normal moving
-    if ((angleYDiff > 23) && (turboActivated == false)){
+    if ((angleYDiff > 20) && (turboActivated == false)){
       angleDisplay();
       turboMode();
       delay(1065);
